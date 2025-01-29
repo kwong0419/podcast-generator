@@ -50,7 +50,7 @@ async def generate_from_transcript(transcript: str = Form(...)) -> Dict:
             raise HTTPException(status_code=400, detail="No transcript provided")
 
         # Truncate transcript if too long (free tier has lower limits)
-        max_length = 2500  # Reduced from 5000
+        max_length = 1500  # Reduced from 5000
         truncated_transcript = transcript[:max_length]
 
         # Minimal prompt
