@@ -1,0 +1,5 @@
+fastapi==0.115.7
+google-generativeai==0.8.4
+python-dotenv==1.0.1
+python-multipart==0.0.20
+uvicorn==0.34.0
