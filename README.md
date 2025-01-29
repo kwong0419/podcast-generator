@@ -85,7 +85,7 @@ npm install
 1. From the backend directory, start the backend FastAPI server:
 
 ```bash
-uvicorn application:app --reload
+python3 application.py
 ```
 
 The API will be available at `http://localhost:5000`
