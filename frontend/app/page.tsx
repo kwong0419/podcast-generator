@@ -1,12 +1,14 @@
 'use client'
 
 import {useState} from 'react'
+import Image from 'next/image'
 import PodcastInput from './components/PodcastInput'
-// import PodcastPlayer from '@/components/PodcastPlayer'
-// import {ScriptDisplay} from '@/components/ScriptDisplay'
+import ScriptDisplay from './components/ScriptDisplay'
+// import PodcastPlayer from './components/PodcastPlayer'
+import {Segment} from './types/types'
 
 export default function Home() {
-  const [generatedScript, setGeneratedScript] = useState<string>('')
+  const [generatedScript, setGeneratedScript] = useState<Segment[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string>('')
 
@@ -44,7 +46,10 @@ export default function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold text-center mb-8">PodcastAI Creator</h1>
+      <div className="flex items-center justify-center gap-2 mb-8">
+        <Image src="/microphone.png" alt="logo" width={32} height={32} className="brightness-0 invert" />
+        <h1 className="text-4xl font-bold">PodcastAI Creator</h1>
+      </div>
 
       <PodcastInput onGenerate={handleGenerate} isGenerating={isGenerating} />
 
@@ -52,8 +57,8 @@ export default function Home() {
 
       {generatedScript && (
         <>
-          {/* <PodcastPlayer script={generatedScript} />
-          <ScriptDisplay script={generatedScript} /> */}
+          {/* <PodcastPlayer script={generatedScript} /> */}
+          <ScriptDisplay segments={generatedScript} />
         </>
       )}
     </div>
