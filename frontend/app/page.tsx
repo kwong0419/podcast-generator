@@ -4,7 +4,7 @@ import {useState} from 'react'
 import Image from 'next/image'
 import PodcastInput from './components/PodcastInput'
 import ScriptDisplay from './components/ScriptDisplay'
-// import PodcastPlayer from './components/PodcastPlayer'
+import PodcastPlayer from './components/PodcastPlayer'
 import {Segment} from './types/types'
 
 export default function Home() {
@@ -60,7 +60,7 @@ export default function Home() {
 
       {generatedSegments && (
         <>
-          {/* <PodcastPlayer script={generatedScript} /> */}
+          <PodcastPlayer segments={generatedSegments} />
           <ScriptDisplay segments={generatedSegments} />
         </>
       )}

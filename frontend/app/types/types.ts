@@ -3,6 +3,10 @@ export interface PodcastInputProps {
   isGenerating: boolean // Loading state indicator
 }
 
+export interface PodcastPlayerProps {
+  segments: Segment[]
+}
+
 export interface Script {
   segments: Segment[]
 }
