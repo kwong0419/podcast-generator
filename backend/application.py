@@ -54,10 +54,23 @@ async def generate_from_transcript(transcript: str = Form(...)) -> Dict:
         truncated_transcript = transcript[:max_length]
 
         # Minimal prompt
-        prompt = f"""Convert to podcast dialogue. Keep it brief:
-Host A: [start conversation about this topic]
-Host B: [respond naturally]
-Topic: {truncated_transcript}"""
+        prompt = f"""Create a natural podcast conversation between two hosts discussing the following topic. 
+Format as a back-and-forth dialogue between Host A and Host B.
+Rules:
+- Keep the conversation casual and engaging
+- Include reactions and natural interjections
+- Make it sound like a real podcast conversation
+- Each host should have distinct perspectives
+- Keep responses concise but meaningful
+
+Topic to discuss: {truncated_transcript}
+
+Format example:
+Host A: [introduces topic with enthusiasm]
+Host B: [reacts and adds perspective]
+Host A: [builds on the point]
+Host B: [offers different angle]
+"""
         
         try:
             response = model.generate_content(prompt)
@@ -120,7 +133,7 @@ def parse_script_to_segments(script: str) -> List[Segment]:
     if current_speaker and current_text:
         segments.append(Segment(
             speaker=current_speaker,
-            text=' '.join(current_text)
+            text=' '.join(current_text) 
         ))
     
     return segments
