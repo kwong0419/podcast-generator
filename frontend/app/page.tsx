@@ -19,8 +19,8 @@ export default function Home() {
     try {
       // check if input is a file or a transcript, set endpoint accordingly
       const endpoint = input instanceof File ? '/api/generate-podcast' : '/api/generate-from-transcript'
-
       const formData = new FormData()
+
       if (input instanceof File) {
         formData.append('audio', input)
       } else {
@@ -33,13 +33,21 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to generate podcast')
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to generate podcast')
       }
 
       const data = await response.json()
+
+      if (!data.segments || data.segments.length === 0) {
+        throw new Error('No segments were generated')
+      }
+
       setGeneratedSegments(data.segments)
     } catch (err) {
+      console.error('Generation error:', err)
       setError(err instanceof Error ? err.message : 'An error occurred')
+      setGeneratedSegments([]) // Reset segments on error
     } finally {
       setIsGenerating(false)
     }

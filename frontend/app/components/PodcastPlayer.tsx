@@ -14,17 +14,21 @@ export default function PodcastPlayer({segments}: PodcastPlayerProps) {
   const [isLoading, setIsLoading] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [isAudioReady, setIsAudioReady] = useState(false)
 
-  // Voice IDs from ElevenLabs
+  // Voice IDs from ElevenLabs (customizable)
   const voices = {
-    'Host A': 'UgBBYS2sOqTuMpoF3BR0', // Mark
-    'Host B': '56AoDkrOh6qfVPDXZ7Pt', // Cassidy
+    'Host A': 'cjVigY5qzO86Huf0OWal', // Eric - conversational
+    'Host B': 'FGY2WhTYpPnrIDTdsKH5', // Laura - social media
   }
 
-  const generateSpeech = async (text: string, voiceId: string): Promise<Blob> => {
-    console.log('Generating speech for:', text, 'with voice:', voiceId)
-
+  const generateSpeech = async (text: string, speaker: string): Promise<Blob> => {
     try {
+      const voiceId = voices[speaker as keyof typeof voices]
+      if (!voiceId) {
+        throw new Error(`No voice ID found for speaker: ${speaker}`)
+      }
+
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
         method: 'POST',
         headers: {
@@ -44,60 +48,64 @@ export default function PodcastPlayer({segments}: PodcastPlayerProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
-        console.error('ElevenLabs API Error:', errorData)
         throw new Error(`Failed to generate audio: ${errorData.message || response.status}`)
       }
 
       return await response.blob()
     } catch (error) {
-      console.error('Error generating speech:', error)
       throw error
     }
   }
 
   const concatenateAudioBlobs = async (audioBlobs: Blob[]): Promise<Blob> => {
+    if (audioBlobs.length === 0) {
+      throw new Error('No audio blobs to concatenate')
+    }
+
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+
     const audioBuffers = await Promise.all(
       audioBlobs.map(async (blob) => {
         const arrayBuffer = await blob.arrayBuffer()
-        const audioContext = new (window.AudioContext || window.AudioContext)()
         return await audioContext.decodeAudioData(arrayBuffer)
       }),
-    )
+    ).catch((error) => {
+      throw new Error('Failed to decode audio data: ' + error.message)
+    })
 
-    // Calculate total duration
-    const totalLength = audioBuffers.reduce((acc, buffer) => acc + buffer.length, 0)
+    const validBuffers = audioBuffers.filter((buffer) => buffer !== null)
 
-    // Create a new audio context for concatenation
-    const audioContext = new (window.AudioContext || window.AudioContext)()
+    if (validBuffers.length === 0) {
+      throw new Error('No valid audio buffers after decoding')
+    }
+
+    const totalLength = validBuffers.reduce((acc, buffer) => acc + buffer.length, 0)
     const finalBuffer = audioContext.createBuffer(
-      audioBuffers[0].numberOfChannels,
+      validBuffers[0].numberOfChannels,
       totalLength,
-      audioBuffers[0].sampleRate,
+      validBuffers[0].sampleRate,
     )
 
-    // Concatenate all audio buffers
     let offset = 0
-    for (const buffer of audioBuffers) {
+    for (const buffer of validBuffers) {
       for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-        const channelData = buffer.getChannelData(channel)
-        finalBuffer.getChannelData(channel).set(channelData, offset)
+        finalBuffer.getChannelData(channel).set(buffer.getChannelData(channel), offset)
       }
       offset += buffer.length
     }
 
-    // Convert back to blob
-    const mediaStreamSource = audioContext.createMediaStreamDestination()
+    const mediaStreamDestination = audioContext.createMediaStreamDestination()
     const source = audioContext.createBufferSource()
     source.buffer = finalBuffer
-    source.connect(mediaStreamSource)
+    source.connect(mediaStreamDestination)
     source.start(0)
 
     return new Promise((resolve) => {
-      const mediaRecorder = new MediaRecorder(mediaStreamSource.stream)
+      const mediaRecorder = new MediaRecorder(mediaStreamDestination.stream)
       const chunks: BlobPart[] = []
 
       mediaRecorder.ondataavailable = (e) => chunks.push(e.data)
-      mediaRecorder.onstop = () => resolve(new Blob(chunks, {type: 'audio/mpeg'}))
+      mediaRecorder.onstop = () => resolve(new Blob(chunks, {type: 'audio/webm'}))
 
       mediaRecorder.start()
       setTimeout(() => mediaRecorder.stop(), finalBuffer.duration * 1000 + 100)
@@ -105,17 +113,21 @@ export default function PodcastPlayer({segments}: PodcastPlayerProps) {
   }
 
   const loadAudioSegments = async () => {
-    console.log('Loading audio segments for:', segments)
     setIsLoading(true)
+    setIsAudioReady(false)
     const audioBlobs: Blob[] = []
 
     try {
-      // Process segments sequentially instead of in parallel
-      for (const segment of segments) {
-        const audioBlob = await generateSpeech(segment.text, voices[segment.speaker as keyof typeof voices])
-        audioBlobs.push(audioBlob)
+      if (!segments || segments.length === 0) {
+        throw new Error('No segments provided')
+      }
 
-        // Add a small delay between requests to avoid rate limiting
+      for (const segment of segments) {
+        const audioBlob = await generateSpeech(segment.text, segment.speaker)
+        if (!audioBlob || audioBlob.size === 0) {
+          throw new Error('Invalid audio generated')
+        }
+        audioBlobs.push(audioBlob)
         await new Promise((resolve) => setTimeout(resolve, 250))
       }
 
@@ -126,9 +138,11 @@ export default function PodcastPlayer({segments}: PodcastPlayerProps) {
       if (audioRef.current) {
         audioRef.current.src = url
         audioRef.current.load()
+        setIsAudioReady(true)
       }
     } catch (error) {
-      console.error('Error loading audio segments:', error)
+      setAudioUrl(null)
+      throw error
     } finally {
       setIsLoading(false)
     }
@@ -199,7 +213,10 @@ export default function PodcastPlayer({segments}: PodcastPlayerProps) {
             max={duration || 0}
             value={currentTime}
             onChange={handleSeek}
-            className="flex-grow h-2 rounded-lg appearance-none bg-gray-200 dark:bg-gray-700 cursor-pointer"
+            disabled={!isAudioReady}
+            className={`flex-grow h-2 rounded-lg appearance-none ${
+              isAudioReady ? 'bg-gray-200 dark:bg-gray-700 cursor-pointer' : 'bg-gray-300 cursor-not-allowed'
+            }`}
           />
           <span className="text-sm">{formatTime(duration)}</span>
         </div>
@@ -207,19 +224,20 @@ export default function PodcastPlayer({segments}: PodcastPlayerProps) {
         <div className="flex items-center space-x-4">
           <button
             onClick={togglePlayPause}
-            disabled={isLoading || !audioUrl}
+            disabled={isLoading || !isAudioReady}
             className={`px-4 py-2 rounded-lg ${
-              isLoading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 text-white'
+              !isAudioReady || isLoading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 text-white'
             }`}
           >
-            {isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
+            {isLoading ? 'Generating...' : isPlaying ? 'Pause' : 'Play'}
           </button>
         </div>
 
-        <div className="text-sm text-gray-500">
-          {/* Calculate the current segment based on the current time and the duration of the audio */}
-          Current segment: {segments[Math.floor((currentTime / duration) * segments.length)]?.text || ''}
-        </div>
+        {isAudioReady && (
+          <div className="text-sm text-gray-500">
+            Current segment: {segments[Math.floor((currentTime / duration) * segments.length)]?.text || ''}
+          </div>
+        )}
       </div>
     </div>
   )
