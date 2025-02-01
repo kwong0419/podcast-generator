@@ -8,7 +8,7 @@ import ScriptDisplay from './components/ScriptDisplay'
 import {Segment} from './types/types'
 
 export default function Home() {
-  const [generatedScript, setGeneratedScript] = useState<Segment[]>([])
+  const [generatedSegments, setGeneratedSegments] = useState<Segment[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string>('')
 
@@ -17,6 +17,7 @@ export default function Home() {
     setError('')
 
     try {
+      // check if input is a file or a transcript, set endpoint accordingly
       const endpoint = input instanceof File ? '/api/generate-podcast' : '/api/generate-from-transcript'
 
       const formData = new FormData()
@@ -36,13 +37,15 @@ export default function Home() {
       }
 
       const data = await response.json()
-      setGeneratedScript(data.script)
+      setGeneratedSegments(data.segments)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setIsGenerating(false)
     }
   }
+
+  console.log('Generated segments:', generatedSegments)
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -55,10 +58,10 @@ export default function Home() {
 
       {error && <div className="text-red-500 text-center my-4">{error}</div>}
 
-      {generatedScript && (
+      {generatedSegments && (
         <>
           {/* <PodcastPlayer script={generatedScript} /> */}
-          <ScriptDisplay segments={generatedScript} />
+          <ScriptDisplay segments={generatedSegments} />
         </>
       )}
     </div>

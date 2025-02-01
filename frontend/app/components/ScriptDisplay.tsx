@@ -1,6 +1,8 @@
 import {Segment} from '../types/types'
 
 export default function ScriptDisplay({segments}: {segments: Segment[]}) {
+  console.log('Segments received:', segments)
+
   return (
     <div className="max-w-2xl mx-auto mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
       <h2 className="text-2xl font-bold mb-4">Generated Script</h2>
