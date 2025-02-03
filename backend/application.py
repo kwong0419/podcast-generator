@@ -1,11 +1,16 @@
-from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi import FastAPI, UploadFile, Form, HTTPException, File
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from google.generativeai import GenerativeModel
 import google.generativeai as genai
 from dotenv import load_dotenv
-from typing import Dict, List, Optional
+from typing import Dict, List
 from pydantic import BaseModel
+import speech_recognition as sr
+from tempfile import NamedTemporaryFile
+import shutil
+from pydub import AudioSegment
+
 
 # Load environment variables
 load_dotenv()
@@ -33,6 +38,9 @@ model = GenerativeModel(
     }
 )
 
+# Initialize speech recognizer
+recognizer = sr.Recognizer()
+
 # Define response models
 class Segment(BaseModel):
     speaker: str
@@ -42,75 +50,6 @@ class PodcastResponse(BaseModel):
     success: bool
     script: str
     segments: List[Segment]
-
-@app.post("/api/generate-from-transcript", response_model=PodcastResponse)
-async def generate_from_transcript(transcript: str = Form(...)) -> Dict:
-    try:
-        if not transcript:
-            raise HTTPException(status_code=400, detail="No transcript provided")
-
-        # Truncate transcript if too long (free tier has lower limits)
-        max_length = 1500  # Reduced from 5000
-        truncated_transcript = transcript[:max_length]
-
-        # Minimal prompt
-        prompt = f"""Create a natural podcast conversation between two hosts discussing the following topic. 
-Format as a back-and-forth dialogue between Host A and Host B.
-Rules:
-- Keep the conversation casual and engaging
-- Include reactions and natural interjections
-- Make it sound like a real podcast conversation
-- Each host should have distinct perspectives
-- Keep responses concise but meaningful
-
-Topic to discuss: {truncated_transcript}
-
-Format example:
-Host A: [introduces topic with enthusiasm]
-Host B: [reacts and adds perspective]
-Host A: [builds on the point]
-Host B: [offers different angle]
-"""
-        
-        try:
-            response = model.generate_content(prompt)
-            script = response.text if response.text else "Failed to generate content"
-        except Exception as api_error:
-            if "429" in str(api_error):
-                raise HTTPException(
-                    status_code=429, 
-                    detail="Please try with a shorter transcript or wait a few minutes"
-                )
-            raise
-
-        return {
-            "success": True,
-            "script": script,
-            "segments": parse_script_to_segments(script)
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/generate-podcast", response_model=PodcastResponse)
-async def generate_podcast(audio: UploadFile) -> Dict:
-    try:
-        if not audio.filename:
-            raise HTTPException(status_code=400, detail="No audio file provided")
-
-        if not audio.content_type.startswith('audio/'):
-            raise HTTPException(status_code=400, detail="File must be an audio file")
-
-        # Here you would process the audio file
-        # For now, we'll return a placeholder response
-        return {
-            "success": True,
-            "script": "Generated script from audio",
-            "segments": []
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 def parse_script_to_segments(script: str) -> List[Segment]:
     segments = []
@@ -133,10 +72,133 @@ def parse_script_to_segments(script: str) -> List[Segment]:
     if current_speaker and current_text:
         segments.append(Segment(
             speaker=current_speaker,
-            text=' '.join(current_text) 
+            text=' '.join(current_text)
         ))
     
     return segments
+
+def limit_segments(segments: List[Segment], max_segments: int = 8) -> List[Segment]:
+    limited_segments = segments[:max_segments]
+    
+    for i, segment in enumerate(limited_segments):
+        text = segment.text
+        if len(text) > 500:
+            last_period = text.rfind('.')
+            last_question = text.rfind('?')
+            last_exclamation = text.rfind('!')
+            
+            end_pos = max(last_period, last_question, last_exclamation)
+            
+            if end_pos > 0:
+                text = text[:end_pos + 1]
+            
+        limited_segments[i] = Segment(
+            speaker=segment.speaker,
+            text=text.strip()
+        )
+    
+    return limited_segments
+
+@app.post("/api/generate-from-transcript", response_model=PodcastResponse)
+async def generate_from_transcript(transcript: str = Form(...)) -> Dict:
+    try:
+        if not transcript:
+            raise HTTPException(status_code=400, detail="No transcript provided")
+
+        prompt = f"""Create an engaging, detailed podcast conversation between HOST A and HOST B about the following topic. 
+Make it natural and conversational, with each host contributing substantial thoughts and reactions.
+Include personal anecdotes, follow-up questions, and deeper insights.
+Ensure all speaker labels are exactly "HOST A" or "HOST B".
+Aim for at least 6-8 exchanges between hosts, with each response being detailed and thoughtful.
+
+Topic: {transcript[:2000]}
+
+Example format:
+HOST A: [detailed opening thought with context]
+HOST B: [engaged response with follow-up question]
+HOST A: [elaborate answer with personal perspective]
+HOST B: [thoughtful reaction with additional insights]
+"""
+        
+        response = model.generate_content(prompt)
+        script = response.text if response.text else "Failed to generate content"
+
+        segments = parse_script_to_segments(script)
+        limited_segments = limit_segments(segments)
+
+        return {
+            "success": True,
+            "script": script,
+            "segments": limited_segments
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/generate-podcast", response_model=PodcastResponse)
+async def generate_podcast(audio: UploadFile = File(...)) -> Dict:
+    try:
+        if not audio.filename:
+            raise HTTPException(status_code=400, detail="No audio file provided")
+
+        # Save the uploaded file temporarily with original format
+        temp_original = NamedTemporaryFile(delete=False)
+        try:
+            shutil.copyfileobj(audio.file, temp_original)
+            temp_original.close()
+
+            # Convert to WAV using pydub
+            audio_segment = AudioSegment.from_file(temp_original.name)
+            
+            # Save as WAV
+            with NamedTemporaryFile(delete=False, suffix='.wav') as temp_wav:
+                audio_segment.export(temp_wav.name, format='wav')
+                
+                # Now process the WAV file
+                with sr.AudioFile(temp_wav.name) as source:
+                    audio_data = recognizer.record(source)
+                    transcript = recognizer.recognize_sphinx(audio_data)
+
+                # Clean up temporary files
+                os.unlink(temp_original.name)
+                os.unlink(temp_wav.name)
+
+            # Generate conversation from transcript
+            prompt = f"""Create an engaging, detailed podcast conversation between HOST A and HOST B about the following topic. 
+Make it natural and conversational, with each host contributing substantial thoughts and reactions.
+Include personal anecdotes, follow-up questions, and deeper insights.
+Ensure all speaker labels are exactly "HOST A" or "HOST B".
+Aim for at least 6-8 exchanges between hosts, with each response being detailed and thoughtful.
+
+Topic: {transcript[:2000]}
+
+Example format:
+HOST A: [detailed opening thought with context]
+HOST B: [engaged response with follow-up question]
+HOST A: [elaborate answer with personal perspective]
+HOST B: [thoughtful reaction with additional insights]
+"""
+            
+            response = model.generate_content(prompt)
+            script = response.text if response.text else "Failed to generate content"
+
+            # Parse and limit segments
+            segments = parse_script_to_segments(script)
+            limited_segments = limit_segments(segments)
+
+            return {
+                "success": True,
+                "script": script,
+                "segments": limited_segments
+            }
+
+        except Exception as e:
+            if os.path.exists(temp_original.name):
+                os.unlink(temp_original.name)
+            raise HTTPException(status_code=500, detail=f"Error processing audio: {str(e)}")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
