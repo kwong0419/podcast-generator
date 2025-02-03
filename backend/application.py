@@ -107,10 +107,8 @@ async def generate_from_transcript(transcript: str = Form(...)) -> Dict:
 
         prompt = f"""Create an engaging, detailed podcast conversation between HOST A and HOST B about the following topic. 
 Make it natural and conversational, with each host contributing substantial thoughts and reactions.
-Include personal anecdotes, follow-up questions, and deeper insights.
 Ensure all speaker labels are exactly "HOST A" or "HOST B".
-Aim for at least 6-8 exchanges between hosts, with each response being detailed and thoughtful.
-
+Aim for at least 6-8 exchanges between hosts.
 Topic: {transcript[:2000]}
 
 Example format:
@@ -166,9 +164,8 @@ async def generate_podcast(audio: UploadFile = File(...)) -> Dict:
             # Generate conversation from transcript
             prompt = f"""Create an engaging, detailed podcast conversation between HOST A and HOST B about the following topic. 
 Make it natural and conversational, with each host contributing substantial thoughts and reactions.
-Include personal anecdotes, follow-up questions, and deeper insights.
 Ensure all speaker labels are exactly "HOST A" or "HOST B".
-Aim for at least 6-8 exchanges between hosts, with each response being detailed and thoughtful.
+Aim for at least 6-8 exchanges between hosts.
 
 Topic: {transcript[:2000]}
 
