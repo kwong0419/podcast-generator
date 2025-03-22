@@ -20,7 +20,10 @@ app = FastAPI(title="PodcastAI Creator API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend URL
+    allow_origins=[
+        "http://localhost:3000",  # Frontend development URL
+        "https://podcastgenerator.netlify.app",  # Your Netlify domain
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

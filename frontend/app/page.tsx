@@ -6,6 +6,7 @@ import PodcastInput from './components/PodcastInput'
 import ScriptDisplay from './components/ScriptDisplay'
 import PodcastPlayer from './components/PodcastPlayer'
 import {Segment} from './types/types'
+import {API_URL} from './config'
 
 export default function Home() {
   const [generatedSegments, setGeneratedSegments] = useState<Segment[]>([])
@@ -27,7 +28,7 @@ export default function Home() {
         formData.append('transcript', input)
       }
 
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         body: formData,
       })

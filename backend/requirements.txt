@@ -6,3 +6,4 @@ uvicorn==0.34.0
 SpeechRecognition==3.10.1
 pocketsphinx==5.0.3
 pydub==0.25.1
+pydantic==2.10.2
