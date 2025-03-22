@@ -57,7 +57,14 @@ export default function Home() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center justify-center gap-2 mb-8">
-        <Image src="/microphone.png" alt="logo" width={32} height={32} className="brightness-0 invert" />
+        <Image
+          src="/microphone.png"
+          alt="Podcast microphone icon"
+          width={32}
+          height={32}
+          className="brightness-0 invert"
+          priority
+        />
         <h1 className="text-4xl font-bold">PodcastAI Creator</h1>
       </div>
 
