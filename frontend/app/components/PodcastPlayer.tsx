@@ -3,6 +3,12 @@
 import {useState, useEffect, useRef} from 'react'
 import {PodcastPlayerProps} from '../types/types'
 
+declare global {
+  interface Window {
+    webkitAudioContext: typeof AudioContext
+  }
+}
+
 export default function PodcastPlayer({segments}: PodcastPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
